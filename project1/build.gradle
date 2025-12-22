@@ -1,0 +1,11 @@
+plugins {
+	id 'org.springframework.boot' version '4.0.1'
+}
+
+dependencies {
+	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	implementation 'org.springframework.boot:spring-boot-starter'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+}
+
+

@@ -1,13 +1,15 @@
-package com.unocode.foremost;
+package com.unocode.project2;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class ForemostApplicationTests {
+class Project2ApplicationTests {
 
 	@Test
 	void contextLoads() {
 	}
 
 }
+
+

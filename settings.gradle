@@ -1,0 +1,4 @@
+rootProject.name = 'foremost'
+
+include 'project1'
+include 'project2'
