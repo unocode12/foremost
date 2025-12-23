@@ -1,4 +1,4 @@
 rootProject.name = 'foremost'
 
-include 'project1'
+include 'designpattern'
 include 'project2'
