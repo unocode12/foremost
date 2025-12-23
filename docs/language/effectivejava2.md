@@ -518,3 +518,1306 @@ if (validValues.contains(x)) {
 ## 🎯 요약
 
 > **불필요한 객체 생성을 피하라는 것은 동일한 의미의 객체를 반복 생성하지 말고, 불변 객체나 캐시, 정적 상수를 통해 재사용하여 메모리 사용과 GC 비용을 줄이라는 의미입니다.**
+
+---
+
+## ✅ 7. 다 쓴 객체 참조를 해제하라 (Effective Java Item 7)
+
+### 📌 핵심 한 문장
+
+**GC는 "객체가 더 이상 필요 없는지"가 아니라 "참조가 남아 있는지"만 본다.**
+
+---
+
+## 🔴 왜 문제가 생기나?
+
+### GC의 동작 원리
+
+Java에서 GC 대상 조건은 단 하나입니다:
+
+**GC Root에서 도달 가능하면 살아 있음**
+
+즉:
+
+- 객체를 안 쓰고 있어도
+- 어딘가에 참조가 남아 있으면
+- GC는 절대 수거하지 않는다
+
+**👉 이게 바로 메모리 누수(memory leak)**
+
+### GC Root의 종류
+
+- 스택의 지역 변수
+- 정적 변수
+- JNI 참조
+- 활성화된 스레드
+
+**핵심**: GC Root에서 도달할 수 없는 객체만 GC 대상이 됩니다.
+
+---
+
+## 🔥 대표적인 문제 예제 (교과서급)
+
+### ❌ 잘못된 Stack 구현
+
+```java
+public class Stack {
+    private Object[] elements;
+    private int size = 0;
+    private static final int DEFAULT_INITIAL_CAPACITY = 16;
+
+    public Stack(int capacity) {
+        elements = new Object[capacity];
+    }
+
+    public void push(Object e) {
+        ensureCapacity();
+        elements[size++] = e;
+    }
+
+    public Object pop() {
+        if (size == 0) {
+            throw new EmptyStackException();
+        }
+        return elements[--size]; // ⚠️ 문제!
+    }
+
+    private void ensureCapacity() {
+        if (elements.length == size) {
+            elements = Arrays.copyOf(elements, 2 * size + 1);
+        }
+    }
+}
+```
+
+### ❗ 뭐가 문제냐면
+
+```java
+Stack stack = new Stack(10);
+stack.push(new Object());
+stack.push(new Object());
+Object obj = stack.pop(); // 첫 번째 객체 반환
+```
+
+**문제점**:
+
+- 논리적으로는 스택에서 제거됨
+- 하지만 배열에 참조는 그대로 남아 있음
+- `elements[1]` → Object (참조 유지 ❌)
+
+**GC 입장**:
+
+- "어? elements 배열에서 참조 중이네? 살아있음"
+- 절대 수거하지 않음
+- 메모리 누수 발생 💣
+
+**결과**:
+
+- 스택을 오래 사용하면 메모리 누수
+- OutOfMemoryError 발생 가능
+
+---
+
+## 🟢 올바른 코드 (이게 핵심이다)
+
+```java
+public Object pop() {
+    if (size == 0) {
+        throw new EmptyStackException();
+    }
+    Object result = elements[--size];
+    elements[size] = null;   // ⭐ 다 쓴 참조 해제
+    return result;
+}
+```
+
+**왜 이게 중요하냐면**:
+
+- `elements[size] = null` → GC 루트와의 연결 끊김
+- 정상 수거 가능
+- 메모리 누수 방지
+
+**개선된 전체 코드**:
+
+```java
+public class Stack {
+    private Object[] elements;
+    private int size = 0;
+    private static final int DEFAULT_INITIAL_CAPACITY = 16;
+
+    public Stack(int capacity) {
+        elements = new Object[capacity];
+    }
+
+    public void push(Object e) {
+        ensureCapacity();
+        elements[size++] = e;
+    }
+
+    public Object pop() {
+        if (size == 0) {
+            throw new EmptyStackException();
+        }
+        Object result = elements[--size];
+        elements[size] = null; // 다 쓴 참조 해제
+        return result;
+    }
+
+    private void ensureCapacity() {
+        if (elements.length == size) {
+            elements = Arrays.copyOf(elements, 2 * size + 1);
+        }
+    }
+}
+```
+
+---
+
+## 🧠 "그럼 항상 null 처리해야 하나요?"
+
+### ❌ 절대 아님
+
+**✔ 특정 경우에만 필요합니다**
+
+### ✅ 명시적으로 참조 해제가 필요한 경우
+
+#### 1️⃣ 자기 메모리를 직접 관리하는 클래스
+
+**예시**:
+
+- 배열
+- Map / Set
+- 캐시
+- 풀(pool)
+
+```java
+// 나쁜 예
+public class ObjectCache {
+    private Object[] cache = new Object[100];
+    private int index = 0;
+
+    public void add(Object obj) {
+        cache[index++] = obj;
+    }
+
+    public Object get(int i) {
+        return cache[i];
+    }
+
+    // 문제: 제거 메서드가 없음
+}
+
+// 좋은 예
+public class ObjectCache {
+    private Object[] cache = new Object[100];
+    private int index = 0;
+
+    public void add(Object obj) {
+        cache[index++] = obj;
+    }
+
+    public Object get(int i) {
+        return cache[i];
+    }
+
+    public void remove(int i) {
+        cache[i] = null; // 명시적 해제
+    }
+}
+```
+
+**👉 이 경우 개발자가 수명 관리 책임자**
+
+#### 2️⃣ 장기 생존 객체
+
+**예시**:
+
+- static 필드
+- 싱글톤
+- 캐시
+- 리스너 등록
+
+```java
+// 나쁜 예
+public class UserManager {
+    private static List<User> users = new ArrayList<>();
+
+    public void addUser(User user) {
+        users.add(user);
+    }
+
+    // 문제: 제거 메서드가 없음
+    // JVM 종료까지 메모리 유지 😱
+}
+
+// 좋은 예
+public class UserManager {
+    private static List<User> users = new ArrayList<>();
+
+    public void addUser(User user) {
+        users.add(user);
+    }
+
+    public void removeUser(User user) {
+        users.remove(user);
+        // 또는 명시적으로 null 처리
+        user = null; // (하지만 remove()만으로도 충분)
+    }
+}
+```
+
+**여기서 제거 안 하면**: JVM 종료까지 메모리 유지 😱
+
+#### 3️⃣ 리스너 / 콜백
+
+```java
+// 나쁜 예
+public class EventSource {
+    private List<EventListener> listeners = new ArrayList<>();
+
+    public void addListener(EventListener listener) {
+        listeners.add(listener);
+    }
+
+    // 문제: 제거 메서드가 없음
+    // 리스너가 계속 쌓임
+}
+
+// 좋은 예
+public class EventSource {
+    private List<EventListener> listeners = new ArrayList<>();
+
+    public void addListener(EventListener listener) {
+        listeners.add(listener);
+    }
+
+    public void removeListener(EventListener listener) {
+        listeners.remove(listener);
+        // 필수: 안 지우면 메모리 누수
+    }
+}
+```
+
+**📌 GUI / Spring / Observer 패턴에서 매우 흔함**
+
+**Spring 예시**:
+
+```java
+@Component
+public class MyComponent {
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
+
+    @EventListener
+    public void handleEvent(MyEvent event) {
+        // 이벤트 처리
+    }
+
+    // Spring이 자동으로 리스너 등록/해제 관리
+    // 하지만 명시적으로 해제해야 하는 경우도 있음
+}
+```
+
+---
+
+### ❌ 굳이 안 해도 되는 경우
+
+```java
+// 지역 변수는 자동으로 해제됨
+public void foo() {
+    Object obj = new Object();
+    // 메서드 종료 시 스택 프레임 제거
+    // GC가 알아서 처리
+}
+
+// 여기서 null 넣는 건 오히려 코드 냄새
+public void foo() {
+    Object obj = new Object();
+    // ... 사용
+    obj = null; // ❌ 불필요! 오히려 가독성 해침
+}
+```
+
+**이유**:
+
+- 지역 변수는 메서드 종료 시 스택 프레임 제거
+- GC가 알아서 처리
+- 명시적 null 처리는 오히려 코드 냄새
+
+---
+
+## 🔥 실제 실무에서 자주 터지는 케이스
+
+### ❌ 캐시
+
+```java
+// 나쁜 예
+public class CacheManager {
+    private Map<String, Object> cache = new HashMap<>();
+
+    public void put(String key, Object value) {
+        cache.put(key, value);
+    }
+
+    public Object get(String key) {
+        return cache.get(key);
+    }
+
+    // 문제: 삭제 로직 없음
+    // 점점 커짐 → OutOfMemoryError
+}
+```
+
+**문제점**:
+
+- 캐시가 계속 커짐
+- 오래된 항목이 제거되지 않음
+- OutOfMemoryError 발생
+
+### ✅ 해결책
+
+#### 방법 1: LRU (Least Recently Used) 캐시
+
+```java
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public class LRUCache<K, V> extends LinkedHashMap<K, V> {
+    private final int maxSize;
+
+    public LRUCache(int maxSize) {
+        super(16, 0.75f, true); // accessOrder = true
+        this.maxSize = maxSize;
+    }
+
+    @Override
+    protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
+        return size() > maxSize; // 크기 초과 시 가장 오래된 항목 제거
+    }
+}
+
+// 사용
+LRUCache<String, Object> cache = new LRUCache<>(100);
+cache.put("key1", value1);
+cache.put("key2", value2);
+// 100개 초과 시 자동으로 오래된 항목 제거
+```
+
+#### 🔍 `super(16, 0.75f, true)` 상세 설명
+
+**LinkedHashMap 생성자 파라미터**:
+
+```java
+public LinkedHashMap(int initialCapacity, float loadFactor, boolean accessOrder)
+```
+
+1. **`initialCapacity = 16`**: 초기 용량
+
+   - HashMap의 초기 버킷(bucket) 크기
+   - 16은 기본값으로 충분한 크기
+
+2. **`loadFactor = 0.75f`**: 로드 팩터
+
+   - HashMap이 리사이징되기 전까지 허용되는 최대 사용률
+   - 0.75 = 75% 채워지면 용량을 2배로 증가
+   - 예: 16 \* 0.75 = 12개 항목이 들어가면 32로 확장
+
+3. **`accessOrder = true`**: ⭐ **핵심 파라미터**
+   - `true`: 접근 순서 유지 (LRU 동작의 핵심!)
+   - `false`: 삽입 순서 유지 (기본값)
+
+**accessOrder의 동작**:
+
+```java
+// accessOrder = false (기본값) - 삽입 순서 유지
+LinkedHashMap<String, String> map1 = new LinkedHashMap<>(16, 0.75f, false);
+map1.put("a", "1");
+map1.put("b", "2");
+map1.put("c", "3");
+map1.get("a"); // 접근해도 순서 변경 안 됨
+// 순서: a -> b -> c (삽입 순서)
+
+// accessOrder = true - 접근 순서 유지 (LRU)
+LinkedHashMap<String, String> map2 = new LinkedHashMap<>(16, 0.75f, true);
+map2.put("a", "1");
+map2.put("b", "2");
+map2.put("c", "3");
+map2.get("a"); // 접근하면 맨 뒤로 이동!
+// 순서: b -> c -> a (가장 최근 접근한 것이 뒤로)
+```
+
+**왜 `accessOrder = true`가 필요한가?**
+
+LRU(Least Recently Used)는 **가장 오래 전에 사용된 항목을 제거**하는 알고리즘입니다.
+
+- `accessOrder = true`로 설정하면:
+  - `get()` 또는 `put()`으로 접근한 항목이 **맨 뒤로 이동**
+  - 가장 앞에 있는 항목이 **가장 오래 전에 사용된 항목**
+  - `removeEldestEntry()`가 호출될 때 가장 앞 항목(eldest)을 제거
+
+**동작 예시**:
+
+```java
+LRUCache<String, String> cache = new LRUCache<>(3);
+
+cache.put("a", "1"); // [a]
+cache.put("b", "2"); // [a, b]
+cache.put("c", "3"); // [a, b, c]
+
+cache.get("a");      // [b, c, a] - a가 맨 뒤로 이동 (최근 접근)
+cache.put("d", "4"); // [c, a, d] - b가 제거됨 (가장 오래됨)
+```
+
+**전체 흐름**:
+
+1. `super(16, 0.75f, true)` 호출
+
+   - LinkedHashMap의 생성자 호출
+   - `accessOrder = true` 설정으로 접근 순서 추적 활성화
+
+2. 항목 접근 시 (`get()` 또는 `put()`)
+
+   - LinkedHashMap이 내부적으로 접근된 항목을 맨 뒤로 이동
+   - 가장 앞 항목이 가장 오래된 항목이 됨
+
+3. `put()` 후 `removeEldestEntry()` 호출
+   - LinkedHashMap이 자동으로 호출
+   - 가장 앞 항목(eldest)이 파라미터로 전달됨
+   - `true` 반환 시 해당 항목 제거
+
+**만약 `accessOrder = false`라면?**
+
+```java
+// accessOrder = false인 경우
+public LRUCache(int maxSize) {
+    super(16, 0.75f, false); // 삽입 순서만 유지
+    this.maxSize = maxSize;
+}
+
+// 문제: get()으로 접근해도 순서가 변경되지 않음
+cache.put("a", "1");
+cache.put("b", "2");
+cache.put("c", "3");
+cache.get("a"); // 접근했지만 순서는 [a, b, c] 그대로
+// LRU가 제대로 동작하지 않음!
+```
+
+**📌 핵심 정리**:
+
+- `super()`: 부모 클래스(LinkedHashMap)의 생성자 호출
+- `accessOrder = true`: 접근 순서를 추적하여 LRU 구현 가능
+- `removeEldestEntry()`: 가장 오래된 항목(맨 앞)을 제거할지 결정
+
+#### 방법 2: WeakHashMap 사용
+
+```java
+import java.util.WeakHashMap;
+
+// WeakReference 사용
+Map<Key, Value> map = new WeakHashMap<>();
+
+// Key 참조 끊기면 GC가 자동 제거
+// 캐시용으로 자주 사용
+```
+
+**동작 원리**:
+
+- `WeakHashMap`은 키를 WeakReference로 저장
+- 키에 대한 강한 참조가 없으면 GC가 자동으로 제거
+- 값은 키가 제거될 때 함께 제거됨
+
+**예시**:
+
+```java
+Map<String, Object> cache = new WeakHashMap<>();
+
+String key = new String("key1");
+cache.put(key, new Object());
+
+// key에 대한 강한 참조가 없어지면
+key = null;
+
+// GC 실행 시 자동으로 캐시에서 제거됨
+```
+
+#### 방법 3: Caffeine / Guava Cache 사용
+
+```java
+// Caffeine 예시
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+
+Cache<String, Object> cache = Caffeine.newBuilder()
+    .maximumSize(10_000) // 최대 크기
+    .expireAfterWrite(10, TimeUnit.MINUTES) // 만료 시간
+    .build();
+
+cache.put("key", value);
+Object value = cache.getIfPresent("key");
+```
+
+**장점**:
+
+- 자동으로 오래된 항목 제거
+- 만료 시간 설정 가능
+- 성능 최적화
+
+---
+
+## 🧪 WeakReference 예시 (고급)
+
+### WeakReference란?
+
+객체에 대한 약한 참조로, GC가 수거할 수 있도록 허용합니다.
+
+```java
+import java.lang.ref.WeakReference;
+
+// 강한 참조
+Object obj = new Object();
+
+// 약한 참조
+WeakReference<Object> weakRef = new WeakReference<>(obj);
+
+// 강한 참조 제거
+obj = null;
+
+// GC 실행 시 weakRef.get()은 null 반환
+Object retrieved = weakRef.get(); // null 가능
+```
+
+### WeakHashMap 예시
+
+```java
+import java.util.WeakHashMap;
+
+public class WeakHashMapExample {
+    public static void main(String[] args) {
+        Map<String, String> map = new WeakHashMap<>();
+
+        String key1 = new String("key1");
+        String key2 = new String("key2");
+
+        map.put(key1, "value1");
+        map.put(key2, "value2");
+
+        System.out.println(map.size()); // 2
+
+        // 강한 참조 제거
+        key1 = null;
+
+        // GC 강제 실행 (실제로는 권장하지 않음)
+        System.gc();
+
+        // 잠시 대기
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
+        System.out.println(map.size()); // 1 (key1이 제거됨)
+    }
+}
+```
+
+**사용 사례**:
+
+- 캐시 구현
+- 리스너 관리
+- 메타데이터 저장
+
+---
+
+## 📊 메모리 누수 vs 정상 메모리 사용
+
+| 상황              | 메모리 누수 | 정상 사용        |
+| ----------------- | ----------- | ---------------- |
+| **배열에서 제거** | 참조 유지   | `null` 처리      |
+| **캐시**          | 무한 증가   | 크기 제한 / 만료 |
+| **리스너**        | 등록만 함   | 등록/해제 쌍     |
+| **지역 변수**     | -           | 자동 해제        |
+
+---
+
+## 🎯 요약
+
+> **Java는 GC가 있지만, 객체 참조가 남아 있으면 GC 대상이 되지 않기 때문에 배열, 캐시, 컬렉션처럼 메모리를 직접 관리하는 경우엔 다 쓴 객체 참조를 명시적으로 해제해야 합니다.**
+
+---
+
+## ✅ 9. try-with-resources를 사용하라 (Effective Java Item 9)
+
+### 📌 핵심 한 문장
+
+**반드시 닫아야 하는 자원은 try-with-resources로 관리하라. finally보다 안전하고, 코드도 더 간결하다.**
+
+---
+
+## 1️⃣ 반드시 닫아야 하는 자원이란?
+
+다음 인터페이스를 구현한 객체들:
+
+- **`AutoCloseable`**: Java 7에서 도입
+- **`Closeable`**: `AutoCloseable`을 상속 (Java 5부터 존재)
+
+### 대표 예시
+
+- `InputStream` / `OutputStream`
+- `Reader` / `Writer`
+- `Socket`
+- JDBC `Connection` / `Statement` / `ResultSet`
+- `FileChannel`
+- `ZipFile`
+
+**👉 닫지 않으면 OS 자원 누수**
+
+**인터페이스 구조**:
+
+```java
+public interface AutoCloseable {
+    void close() throws Exception;
+}
+
+public interface Closeable extends AutoCloseable {
+    void close() throws IOException; // 더 구체적인 예외
+}
+```
+
+---
+
+## 2️⃣ ❌ try-finally의 문제점
+
+### 단일 자원도 위험
+
+```java
+// 나쁜 예
+InputStream in = new FileInputStream("data.txt");
+try {
+    // 파일 읽기 작업
+    int data = in.read();
+} finally {
+    in.close(); // 예외 발생 가능!
+}
+```
+
+**문제점**:
+
+- `close()`에서 예외 발생 시?
+- 원래 예외가 덮어씌워짐
+- 예외 처리 복잡
+
+**예외 덮어쓰기 예시**:
+
+```java
+InputStream in = new FileInputStream("data.txt");
+try {
+    int data = in.read(); // IOException 발생
+    if (data == -1) {
+        throw new IOException("파일 끝");
+    }
+} finally {
+    in.close(); // 여기서도 IOException 발생
+    // 결과: close()의 예외만 보이고, read()의 예외는 사라짐!
+}
+```
+
+### 🔥 다중 자원 → 지옥
+
+```java
+// 나쁜 예: 다중 자원 관리
+InputStream in = new FileInputStream("a.txt");
+OutputStream out = new FileOutputStream("b.txt");
+try {
+    // 파일 복사 작업
+    byte[] buffer = new byte[1024];
+    int bytesRead;
+    while ((bytesRead = in.read(buffer)) != -1) {
+        out.write(buffer, 0, bytesRead);
+    }
+} finally {
+    // 복잡한 예외 처리
+    try {
+        out.close();
+    } catch (IOException e) {
+        // 로깅
+    }
+    try {
+        in.close();
+    } catch (IOException e) {
+        // 로깅
+    }
+}
+```
+
+**문제점**:
+
+- 📌 가독성 ❌
+- 📌 예외 처리 ❌
+- 📌 실수 가능성 💥
+- 📌 자원 해제 순서 주의 필요
+
+---
+
+## 3️⃣ ✅ try-with-resources (정답)
+
+### 기본 사용법
+
+```java
+// 좋은 예: 단일 자원
+try (InputStream in = new FileInputStream("data.txt")) {
+    int data = in.read();
+    // 자동으로 close() 호출
+}
+
+// 좋은 예: 다중 자원
+try (InputStream in = new FileInputStream("a.txt");
+     OutputStream out = new FileOutputStream("b.txt")) {
+    // 파일 복사 작업
+    byte[] buffer = new byte[1024];
+    int bytesRead;
+    while ((bytesRead = in.read(buffer)) != -1) {
+        out.write(buffer, 0, bytesRead);
+    }
+    // 자동으로 역순으로 close() 호출 (out -> in)
+}
+```
+
+### 장점
+
+- ✔ **자동 close**: 블록 종료 시 자동으로 `close()` 호출
+- ✔ **선언 순서의 역순으로 close**: 나중에 선언한 것부터 닫힘
+- ✔ **예외 안전**: suppressed exception으로 예외 보존
+- ✔ **코드 간결**: 보일러플레이트 코드 제거
+
+### 실제 예시
+
+```java
+// 파일 복사
+public void copyFile(String source, String dest) throws IOException {
+    try (InputStream in = new FileInputStream(source);
+         OutputStream out = new FileOutputStream(dest)) {
+
+        byte[] buffer = new byte[8192];
+        int bytesRead;
+        while ((bytesRead = in.read(buffer)) != -1) {
+            out.write(buffer, 0, bytesRead);
+        }
+    }
+    // 자동으로 close() 호출됨
+}
+
+// JDBC 사용
+public List<User> getUsers() throws SQLException {
+    String sql = "SELECT * FROM users";
+    try (Connection conn = dataSource.getConnection();
+         PreparedStatement stmt = conn.prepareStatement(sql);
+         ResultSet rs = stmt.executeQuery()) {
+
+        List<User> users = new ArrayList<>();
+        while (rs.next()) {
+            users.add(mapRow(rs));
+        }
+        return users;
+    }
+    // 자동으로 rs -> stmt -> conn 순서로 close()
+}
+```
+
+---
+
+## 4️⃣ Suppressed Exception (핵심 포인트)
+
+### ❌ try-finally의 문제
+
+```java
+// 나쁜 예
+try {
+    throw new RuntimeException("main exception");
+} finally {
+    throw new IOException("close exception");
+}
+// 결과: IOException만 보임 (RuntimeException 사라짐!)
+```
+
+**문제**: `close()` 예외 → 기존 예외 덮어씀
+
+### ✅ try-with-resources의 해결
+
+```java
+// 좋은 예
+try (Resource r = new Resource()) {
+    throw new RuntimeException("main exception");
+}
+// 결과:
+// - RuntimeException("main exception") - 주 예외
+// - IOException("close exception") - suppressed 예외
+```
+
+**장점**:
+
+- 주 예외 유지
+- `close()` 예외는 suppressed로 보존
+
+### Suppressed Exception 확인 방법
+
+```java
+try (Resource r = new Resource()) {
+    throw new RuntimeException("main");
+} catch (RuntimeException e) {
+    // 주 예외
+    System.out.println("Main exception: " + e.getMessage());
+
+    // Suppressed 예외 확인
+    Throwable[] suppressed = e.getSuppressed();
+    for (Throwable t : suppressed) {
+        System.out.println("Suppressed: " + t.getMessage());
+    }
+}
+```
+
+**예시**:
+
+```java
+public class Resource implements AutoCloseable {
+    @Override
+    public void close() throws IOException {
+        throw new IOException("close failed");
+    }
+}
+
+try (Resource r = new Resource()) {
+    throw new RuntimeException("work failed");
+} catch (RuntimeException e) {
+    System.out.println("Caught: " + e.getMessage()); // "work failed"
+
+    Throwable[] suppressed = e.getSuppressed();
+    for (Throwable t : suppressed) {
+        System.out.println("Suppressed: " + t.getMessage()); // "close failed"
+    }
+}
+```
+
+---
+
+## 5️⃣ 내부 동작 (컴파일 결과 개념)
+
+### 원본 코드
+
+```java
+try (Resource r = new Resource()) {
+    work();
+}
+```
+
+### 컴파일 후 개념적으로 (의사 코드)
+
+```java
+Resource r = new Resource();
+Throwable t = null;
+try {
+    work();
+} catch (Throwable e) {
+    t = e;
+    throw e;
+} finally {
+    if (r != null) {
+        if (t != null) {
+            try {
+                r.close();
+            } catch (Throwable closeEx) {
+                t.addSuppressed(closeEx); // suppressed로 추가
+            }
+        } else {
+            r.close();
+        }
+    }
+}
+```
+
+**핵심**: 이걸 사람이 쓰지 않아도 된다는 게 핵심!
+
+### 다중 자원의 경우
+
+```java
+try (Resource1 r1 = new Resource1();
+     Resource2 r2 = new Resource2()) {
+    work();
+}
+```
+
+**컴파일 후 개념적으로**:
+
+```java
+Resource1 r1 = new Resource1();
+Throwable t = null;
+try {
+    Resource2 r2 = new Resource2();
+    try {
+        work();
+    } catch (Throwable e) {
+        t = e;
+        throw e;
+    } finally {
+        if (r2 != null) {
+            if (t != null) {
+                try { r2.close(); }
+                catch (Throwable e) { t.addSuppressed(e); }
+            } else {
+                r2.close();
+            }
+        }
+    }
+} catch (Throwable e) {
+    t = e;
+    throw e;
+} finally {
+    if (r1 != null) {
+        if (t != null) {
+            try { r1.close(); }
+            catch (Throwable e) { t.addSuppressed(e); }
+        } else {
+            r1.close();
+        }
+    }
+}
+```
+
+**👉 역순으로 close() 호출 보장**
+
+---
+
+## 6️⃣ AutoCloseable 구현 시 주의점
+
+### 올바른 구현
+
+```java
+public class Resource implements AutoCloseable {
+    private boolean closed = false;
+
+    @Override
+    public void close() throws Exception {
+        if (!closed) {
+            // 자원 해제 로직
+            closed = true;
+        }
+    }
+}
+```
+
+### 권장 사항
+
+1. **`close()`는 idempotent (멱등성)**
+
+   - 여러 번 호출해도 안전하게
+   - 이미 닫힌 자원에 대해 예외 던지지 않음
+
+2. **예외 최소화**
+
+   - 가능하면 예외를 던지지 않음
+   - 예외가 발생해도 로깅 후 무시
+
+3. **상태 확인**
+   - 이미 닫혔는지 확인 후 처리
+
+**예시**:
+
+```java
+public class DatabaseConnection implements AutoCloseable {
+    private Connection conn;
+    private boolean closed = false;
+
+    public DatabaseConnection(String url) throws SQLException {
+        this.conn = DriverManager.getConnection(url);
+    }
+
+    @Override
+    public void close() throws SQLException {
+        if (!closed && conn != null) {
+            conn.close();
+            closed = true;
+        }
+        // 이미 닫혔으면 아무것도 하지 않음 (idempotent)
+    }
+}
+```
+
+---
+
+## 7️⃣ 언제 써야 하나?
+
+| 상황              | try-with-resources |
+| ----------------- | ------------------ |
+| **파일**          | ✅                 |
+| **DB 커넥션**     | ✅                 |
+| **소켓**          | ✅                 |
+| **스트림**        | ✅                 |
+| **네이티브 자원** | ✅                 |
+
+**👉 판단 기준**: "닫아야 하는가?" → Yes면 무조건 사용
+
+### 사용 예시
+
+```java
+// 파일 읽기
+try (BufferedReader reader = Files.newBufferedReader(path)) {
+    reader.lines().forEach(System.out::println);
+}
+
+// 파일 쓰기
+try (BufferedWriter writer = Files.newBufferedWriter(path)) {
+    writer.write("Hello, World!");
+}
+
+// 소켓
+try (Socket socket = new Socket("localhost", 8080);
+     PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+     BufferedReader in = new BufferedReader(
+         new InputStreamReader(socket.getInputStream()))) {
+    // 통신 작업
+}
+
+// ZIP 파일
+try (ZipFile zipFile = new ZipFile("archive.zip")) {
+    Enumeration<? extends ZipEntry> entries = zipFile.entries();
+    // 작업
+}
+```
+
+---
+
+## 8️⃣ Spring에서는?
+
+### Spring이 관리해주는 경우
+
+```java
+@Service
+public class UserService {
+    @Autowired
+    private DataSource dataSource; // Spring이 관리
+
+    @Transactional
+    public void saveUser(User user) {
+        // Spring이 트랜잭션 관리
+        // 개발자가 직접 close() ❌
+    }
+}
+```
+
+**Spring이 관리하는 자원**:
+
+- `DataSource`
+- `TransactionManager`
+- `EntityManager` (JPA)
+
+**👉 개발자가 직접 `close()` ❌**
+
+### 하지만 여전히 필요한 경우
+
+```java
+@Service
+public class FileService {
+    public void processFile(String path) throws IOException {
+        // 직접 만든 Stream은 여전히 try-with-resources 필요
+        try (InputStream in = new FileInputStream(path);
+             BufferedReader reader = new BufferedReader(
+                 new InputStreamReader(in))) {
+            // 파일 처리
+        }
+    }
+
+    public void sendData(String host, int port) throws IOException {
+        // 직접 연 소켓도 try-with-resources 필요
+        try (Socket socket = new Socket(host, port);
+             OutputStream out = socket.getOutputStream()) {
+            // 데이터 전송
+        }
+    }
+}
+```
+
+**👉 직접 만든 자원은 여전히 try-with-resources 필수**
+
+---
+
+## 📊 try-finally vs try-with-resources 비교
+
+| 항목            | try-finally | try-with-resources |
+| --------------- | ----------- | ------------------ |
+| **코드 간결성** | ❌ 복잡     | ⭕ 간결            |
+| **예외 보존**   | ❌ 덮어씀   | ⭕ Suppressed      |
+| **다중 자원**   | ❌ 복잡     | ⭕ 간단            |
+| **자동 close**  | ❌ 수동     | ⭕ 자동            |
+| **역순 close**  | ❌ 수동     | ⭕ 자동            |
+
+---
+
+## 🎯 요약
+
+> **try-finally는 다중 자원과 예외 처리에 취약하지만, try-with-resources는 역순 close와 예외 보존을 보장해 실무에서 가장 안전한 자원 관리 방법입니다.**
+
+---
+
+## 🧠 핵심 요약
+
+- **GC는 메모리만 관리**: OS 자원은 명시적 해제 필요
+- **finalizer / cleaner ❌**: 사용하지 말 것
+- **try-with-resources ✅**: 항상 사용할 것
+
+### 🔍 OS 자원이란?
+
+**OS 자원(Operating System Resources)**은 운영체제가 관리하는 시스템 레벨의 제한된 자원입니다.
+
+#### 왜 GC가 관리하지 못하나?
+
+**GC의 역할**:
+
+- JVM 힙 메모리 내의 Java 객체만 관리
+- 객체의 메모리 할당/해제만 담당
+
+**OS 자원의 특성**:
+
+- JVM 밖의 운영체제 레벨 자원
+- 파일 디스크립터, 네트워크 소켓, 프로세스 등
+- GC가 접근할 수 없음
+
+#### 대표적인 OS 자원
+
+| OS 자원             | 설명                              | Java 객체                             |
+| ------------------- | --------------------------------- | ------------------------------------- |
+| **파일 디스크립터** | 열린 파일에 대한 OS 레벨 참조     | `FileInputStream`, `FileOutputStream` |
+| **소켓 디스크립터** | 네트워크 연결에 대한 OS 레벨 참조 | `Socket`, `ServerSocket`              |
+| **프로세스**        | 외부 프로세스 실행                | `Process`                             |
+| **메모리 맵 파일**  | OS가 관리하는 메모리 매핑         | `FileChannel`                         |
+| **네이티브 메모리** | JVM 힙 밖의 메모리                | `DirectByteBuffer`                    |
+| **DB 연결**         | 데이터베이스 서버 연결            | `Connection`                          |
+
+#### 왜 명시적 해제가 필요한가?
+
+**1. 제한된 자원**
+
+```java
+// 파일 디스크립터는 제한적 (보통 프로세스당 수천 개)
+// 닫지 않으면 디스크립터 고갈
+for (int i = 0; i < 10000; i++) {
+    FileInputStream in = new FileInputStream("file.txt");
+    // close() 없으면 디스크립터 누수
+    // 10000번 반복 시 "Too many open files" 에러 발생
+}
+```
+
+**2. OS 레벨 자원**
+
+```java
+// Java 객체는 GC가 수거하지만
+FileInputStream in = new FileInputStream("file.txt");
+in = null; // Java 객체는 GC 대상
+
+// 하지만 OS의 파일 디스크립터는 여전히 열려있음!
+// GC는 OS 자원을 해제할 수 없음
+```
+
+**3. 자원 누수의 심각성**
+
+- **파일 디스크립터**: "Too many open files" 에러
+- **소켓**: 포트 고갈, 연결 제한 초과
+- **DB 연결**: Connection Pool 고갈, 서버 부하
+- **메모리**: OutOfMemoryError (네이티브 메모리)
+
+#### GC vs OS 자원 해제
+
+```java
+// 메모리 (GC가 관리)
+Object obj = new Object();
+obj = null;
+// GC가 나중에 메모리 해제 ✅
+
+// OS 자원 (명시적 해제 필요)
+FileInputStream in = new FileInputStream("file.txt");
+in = null;
+// GC는 Java 객체만 수거
+// OS의 파일 디스크립터는 여전히 열려있음 ❌
+// 명시적으로 close() 필요!
+```
+
+#### 실제 예시
+
+**파일 디스크립터 누수**:
+
+```java
+// 나쁜 예: 파일 디스크립터 누수
+public void processFiles(List<String> files) {
+    for (String file : files) {
+        FileInputStream in = new FileInputStream(file);
+        // 작업
+        // close() 없음 → 디스크립터 누수
+    }
+    // 수천 개 파일 처리 시 "Too many open files" 에러
+}
+
+// 좋은 예: try-with-resources로 자동 해제
+public void processFiles(List<String> files) throws IOException {
+    for (String file : files) {
+        try (FileInputStream in = new FileInputStream(file)) {
+            // 작업
+        } // 자동으로 close() 호출 → 디스크립터 해제
+    }
+}
+```
+
+**소켓 누수**:
+
+```java
+// 나쁜 예: 소켓 누수
+public void connect(String host, int port) throws IOException {
+    Socket socket = new Socket(host, port);
+    // 작업
+    // close() 없음 → 소켓 디스크립터 누수
+    // 포트 고갈 가능
+}
+
+// 좋은 예: try-with-resources로 자동 해제
+public void connect(String host, int port) throws IOException {
+    try (Socket socket = new Socket(host, port)) {
+        // 작업
+    } // 자동으로 close() 호출 → 소켓 디스크립터 해제
+}
+```
+
+**DB 연결 누수**:
+
+```java
+// 나쁜 예: DB 연결 누수
+public List<User> getUsers() throws SQLException {
+    Connection conn = dataSource.getConnection();
+    PreparedStatement stmt = conn.prepareStatement("SELECT * FROM users");
+    ResultSet rs = stmt.executeQuery();
+    // 작업
+    // close() 없음 → 연결 누수
+    // Connection Pool 고갈 가능
+}
+
+// 좋은 예: try-with-resources로 자동 해제
+public List<User> getUsers() throws SQLException {
+    try (Connection conn = dataSource.getConnection();
+         PreparedStatement stmt = conn.prepareStatement("SELECT * FROM users");
+         ResultSet rs = stmt.executeQuery()) {
+        // 작업
+    } // 자동으로 close() 호출 → 연결 해제
+}
+```
+
+#### 📌 핵심 정리
+
+- **GC**: JVM 힙 메모리만 관리 (Java 객체)
+- **OS 자원**: 운영체제가 관리하는 시스템 자원
+- **해결책**: `close()` 메서드로 명시적 해제 (try-with-resources 사용)
+- **결과**: 자원 누수 방지, 시스템 안정성 확보
+
+**원칙**:
+
+1. 닫아야 하는 자원은 무조건 try-with-resources
+2. `AutoCloseable` 구현 시 idempotent하게
+3. Spring이 관리하는 자원도 직접 만든 자원은 try-with-resources
+
+---
