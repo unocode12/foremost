@@ -2,6 +2,8 @@ package com.unocode.factorymethod;
 
 public class Client {
 
+    //"구체적으로 어떤 인스턴스를 만들지는 서브 클래스가 정한다."
+
     public static void main(String[] args) {
         Client client = new Client();
         client.print(new WhiteshipFactory(), "whiteship", "aa@mail.com");

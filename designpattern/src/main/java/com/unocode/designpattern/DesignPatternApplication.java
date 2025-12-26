@@ -1,15 +1,17 @@
 
 package com.unocode.designpattern;
 
+import com.unocode.factorymethod.FactoryMethodConfig;
 import com.unocode.singleton.Settings;
 import com.unocode.singleton.SingletonConfig;
+import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.support.ClassPathXmlApplicationContext;
 
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectInput;
@@ -18,6 +20,7 @@ import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.stream.Stream;
 
 @SpringBootApplication
 public class DesignPatternApplication {
@@ -58,6 +61,23 @@ public class DesignPatternApplication {
         String hello1 = ac.getBean("hello", String.class);
         String hello2 = ac.getBean("hello", String.class);
         System.out.println(hello1 == hello2);
+
+        //팩토리 메서드 패턴
+        BeanFactory javaFactory = new AnnotationConfigApplicationContext(FactoryMethodConfig.class);
+        String hello3 = javaFactory.getBean("hello", String.class);
+
+        BeanFactory xmlFactory = new ClassPathXmlApplicationContext("factoryMethodConfig.xml");
+        String hello4 = xmlFactory.getBean("hello", String.class);
+
+        //빌더 패턴
+        StringBuilder sb = new StringBuilder(); //not synchronized
+        String sbString = sb.append("test").append("finished").toString();
+
+        Stream.Builder<String> streamStringBuilder = Stream.builder();
+        Stream<String> streamString = streamStringBuilder.add("test").add("finish").build();
+        Stream<String> streamString2 = Stream.<String>builder().add("test").add("finish").build();
+        streamString.forEach(System.out::println);
+
 
         SpringApplication.run(DesignPatternApplication.class, args);
     }
