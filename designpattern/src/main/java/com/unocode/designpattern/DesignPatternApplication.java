@@ -1,9 +1,9 @@
 
 package com.unocode.designpattern;
 
-import com.unocode.factorymethod.FactoryMethodConfig;
-import com.unocode.singleton.Settings;
-import com.unocode.singleton.SingletonConfig;
+import com.unocode.creational.factorymethod.FactoryMethodConfig;
+import com.unocode.creational.singleton.Settings;
+import com.unocode.creational.singleton.SingletonConfig;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
