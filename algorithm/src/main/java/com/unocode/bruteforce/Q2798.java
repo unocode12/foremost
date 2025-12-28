@@ -80,7 +80,7 @@ LinkedList
 
 */
 
-public class Blackjack {
+public class Q2798 {
 
     public static void main(String[] args) throws IOException {
         BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
