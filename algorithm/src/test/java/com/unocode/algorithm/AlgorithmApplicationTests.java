@@ -1,10 +1,10 @@
-package com.unocode.project2;
+package com.unocode.algorithm;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class Project2ApplicationTests {
+class AlgorithmApplicationTests {
 
 	@Test
 	void contextLoads() {
