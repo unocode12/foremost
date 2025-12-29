@@ -78,7 +78,6 @@ public class DesignPatternApplication {
         Stream<String> streamString2 = Stream.<String>builder().add("test").add("finish").build();
         streamString.forEach(System.out::println);
 
-
         SpringApplication.run(DesignPatternApplication.class, args);
     }
 
