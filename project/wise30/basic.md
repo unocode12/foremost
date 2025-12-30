@@ -50,6 +50,7 @@ Subscriber(
     └─ Subscriber
     └─ Subscriber
     └─ Subscriber
+
 + call stack X
 + 시그널 전달 모델
 + 예외는 onError 시그널
@@ -65,3 +66,35 @@ Subscriber(
    → 안쪽 → 바깥쪽으로 흐름
 6) 예외 발생 시 onError가
    → 바깥 Subscriber들로 역전파
+
+### WebFlux와 스레드
+```text
+Client
+  ↓
+Netty EventLoop (NIO Thread)
+  ↓
+Reactive Pipeline (Mono / Flux)
+  ↓
+Subscriber
+```
+```text
+EventLoopGroup
+ ├── eventloop-1
+ ├── eventloop-2
+ ├── ...
+ └── eventloop-N   (N = CPU core * 2)
+```
++ 각 EventLoop = 싱글 쓰레드
++ 하나의 쓰레드가:
+  + 여러 커넥션
+  + 여러 요청
+  + 여러 응답을 처리
+
+### 스레드 제어 핵심
++ ubscribeOn vs publishOn => 소스 실행 위치 결정 VS 이후 연산자 실행 위치 결정
++ Reactor Scheduler
+  + immediate
+  + parallel
+  + boundedElastic
+    + Blocking I/O 전용
+    + 동적으로 늘어나는 풀
