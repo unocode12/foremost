@@ -41,7 +41,7 @@
     ExceptionHandlingWebHandler에서 List<WebExceptionHandler>를 순서대로 실행
 
 ### 우선순위
-    ```
+    ```java
     @Order(-2)
     public class GlobalErrorHandler implements WebExceptionHandler
     ```
@@ -81,3 +81,10 @@
     
     5 이후 체인
     onError → handled → onComplete
+
+### doOnError vs WebExceptionHandler
+구분	        doOnError	        WebExceptionHandler
+위치	        Subscriber 내부	    Subscriber 외부
+역할	        관찰 / 로깅	        응답 생성
+에러 소비	❌ (흘려보냄)	    ✅ (종결)
+실행 시점	onError 시그널 중간	최종
