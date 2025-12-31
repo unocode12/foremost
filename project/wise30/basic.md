@@ -1,5 +1,6 @@
 > WebFlux에서 요청 처리 흐름은 "메서드 호출 스택"이 아니라
 > "Subscriber가 Subscriber를 감싼 실행 체인"이다
+> Spring Boot 기본 WebFlux = Netty = Servlet 없음
 
 > Reactor에서 Subscriber는 아래와 같다.
 ```java
@@ -67,6 +68,37 @@ Subscriber(
 6) 예외 발생 시 onError가
    → 바깥 Subscriber들로 역전파
 
+```text
+[Client]
+   ↓ HTTP
+[Netty Channel]
+   ↓ (EventLoop Thread)
+[Reactor Netty HttpServer]
+   ↓
+[HttpServerOperations]
+   ↓
+[ReactorHttpHandlerAdapter]
+   ↓
+[WebHandler]
+   ↓
+[WebFilter Chain]
+   ↓
+[DispatcherHandler]
+   ↓
+[HandlerMapping]
+   ↓
+[HandlerAdapter]
+   ↓
+[@Controller / RouterFunction]
+   ↓
+[Mono / Flux]
+   ↓
+[Response Write]
+   ↓
+[Netty Channel Flush]
+
+```
+
 ### WebFlux와 스레드
 ```text
 Client
@@ -98,3 +130,20 @@ EventLoopGroup
   + boundedElastic
     + Blocking I/O 전용
     + 동적으로 늘어나는 풀
+
+### 서블릿 기반 vs 서블릿 사용 X(netty)
++ 서블릿 기반
+```text
+HTTP 요청
+ → Servlet
+   → Reactive Adapter
+     → WebFlux Handler
+```
+
++ 서블릿 사용 X
+```text
+HTTP 요청
+ → Netty EventLoop
+   → Reactor Publisher
+     → WebFlux Handler
+```
