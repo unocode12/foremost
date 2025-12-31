@@ -8,7 +8,7 @@ public class AdapterInSpring {
 
     public static void main(String[] args) {
         DispatcherServlet dispatcherServlet = new DispatcherServlet();
-  ↓
+
         /*
 
         DispatcherServlet.doService()
@@ -126,7 +126,7 @@ public class AdapterInSpring {
           ↓
         JSON 응답
 
-        정홗히 따지자면, 핸들러 맵핑 후 RequestMappingHandlerAdaptor를 얻고, handle을 수행하면 invocableMethod를 만들고, 이 method를 invokeAndHandle하는데,
+        정확히 따지자면, 핸들러 맵핑 후 RequestMappingHandlerAdaptor를 얻고, handle을 수행하면 invocableMethod를 만들고, 이 method를 invokeAndHandle하는데,
         그 안에서 이미 등록된 returnValueHandlers 들 중 맞는 handler를 통해 handleReturnValue 함수를 수행
 
         RequestMappingHandlerAdaptor에서는 getDefaultReturnValueHandlers()를 통해 기본적으로 제공하는 핸들러들을 returnValueHandlers에 등록한다.

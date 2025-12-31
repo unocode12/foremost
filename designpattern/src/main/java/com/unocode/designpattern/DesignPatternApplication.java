@@ -22,7 +22,10 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.stream.Stream;
 
-@SpringBootApplication
+@SpringBootApplication(exclude = {
+        org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration.class,
+        org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration.class
+})
 public class DesignPatternApplication {
 
     public static void main(String[] args) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException, IOException, ClassNotFoundException {
