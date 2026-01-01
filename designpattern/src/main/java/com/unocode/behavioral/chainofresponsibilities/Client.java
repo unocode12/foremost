@@ -5,7 +5,6 @@ public class Client {
 
     /*
     책임연쇄패턴 : 요청을 보내는 쪽과 처리하는 쪽을 분리하는 패턴, filtering 패턴
-
      */
 
     private RequestHandler requestHandler;
