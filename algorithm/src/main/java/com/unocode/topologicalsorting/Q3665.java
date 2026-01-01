@@ -77,7 +77,6 @@ public class Q3665 {
 
                 for (int p = 1 ; p <= nodeNumber ; p++) {
                     if (graph[currentNode][p]) {
-                        graph[currentNode][p] = false;
                         indegree[p]--;
                         if (indegree[p] == 0) {
                             queue.offer(p);
