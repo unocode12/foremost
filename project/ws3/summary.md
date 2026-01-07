@@ -1,3 +1,5 @@
+## 공통부 정리
+
 ### 기본 스펙
 + 자바 : 21버전
 + 스프링부트 : 3.4.3버전
@@ -68,7 +70,7 @@
     + 400번대 에러(client)는 실패로 기록하지 않는다. 
     + record-failure-predicate 설정에서 설정한 Config 빈에서 정의하며, true면 실패로 기록, false는 실패로 기록하지 않는다. (test method overriding)
 
-## 가변부 개발
+## 가변부 정리
 
 ### WebClinet 분석 
 
@@ -83,3 +85,9 @@
   + WebFlux의 WebExceptionHandler를 구현하여 전역 예외 처리
   + 비동기 예외 처리
   + 우선순위를 -2로 설정하여 높게 설정해 기본 예외 처리보다 먼저 실행되도록 함
+
+### Webflux router와 handler, ServerRequest와 ServerResponse
+
+### 그 외 Webflux 사용 시 사용되는 컴포넌트 및 객체 기술적 분석 및 동작 방식과 흐름 정리
+
+## API Gateway 정리
