@@ -62,7 +62,7 @@ public class Q22967 {
         }
 
         System.out.println(addedEdges.size());
-        System.out.println(2); 
+        System.out.println(2);
         for (Connection c : addedEdges) {
             System.out.println(c.u + " " + c.v);
         }
