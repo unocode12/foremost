@@ -1,0 +1,1 @@
+## 백엔드(springboot)와 k8s pod 및 alb 사이에서의 라이프사이클 관리 및 graceful shutdown 고려 정리
