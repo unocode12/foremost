@@ -7,18 +7,18 @@ SSL Offloading은 트래픽 집중 지점에서 암호화 처리를 수행하므
 
 [트래픽 흐름 도식]
 Client
-  |
-  | HTTPS (TLS Handshake, Encrypted)
-  v
+|
+| HTTPS (TLS Handshake, Encrypted)
+v
 +-------------------------------+
 | Load Balancer / Proxy / CDN   |
 | - TLS Termination             |
-| - Certificate Validation     |
-| - Decryption / Encryption    |
+| - Certificate Validation      |
+| - Decryption / Encryption     |
 +-------------------------------+
-          |
-          | HTTP (or Internal TLS)
-          v
+|
+| HTTP (or Internal TLS)
+v
 +-------------------------------+
 | Application Server            |
 | - Business Logic              |
